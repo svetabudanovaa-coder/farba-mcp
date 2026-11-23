@@ -276,6 +276,8 @@ async def selftest(_: Request) -> JSONResponse:
             "search_has_prices": any(i.get("price") for i in items),
             "product_has_name": bool(p.get("name")),
             "product_has_price": bool(p.get("price")),
+            "store_price_looks_sane": bool(p.get("price")) and p["price"]["in_store"] <= p["price"]["online"] * 1.5,
+            "search_has_availability": any(i.get("availability") != "unknown" for i in items),
             "product_has_store_stock": any(s.get("qty", 0) > 0 for s in p["stores"]),
             "all_store_rows_recognized": all(s.get("store_id") for s in p["stores"]),
         }

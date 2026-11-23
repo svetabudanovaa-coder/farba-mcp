@@ -57,7 +57,9 @@ class NotFound(Exception):
 
 _BLOCK = re.compile(r"<\s*(br|/li|/div|/p|/h\d|/tr|/ul|/ol|li|h\d|p|div)\b[^>]*>", re.I)
 _TAG = re.compile(r"<[^>]+>")
-_PRICE = re.compile(r"(\d[\d\s ]*,\d{2})\s*Руб")
+# Тысячи бывают через пробел («1 499,95»), но соседние числа склеивать нельзя
+# (на карточке код «ЦБ000525821» стоит прямо перед ценой «72,95 Руб»).
+_PRICE = re.compile(r"(?<![\d,.])((?:\d{1,3}(?:[ \u00a0]\d{3})+|\d+),\d{2})\s*Руб")
 
 
 def text_lines(fragment: str) -> list[str]:
@@ -87,7 +89,7 @@ def price_obj(prices: list[float]) -> dict | None:
     """На сайте: зачёркнутая цена = цена в магазине, вторая = цена при заказе на сайте."""
     if not prices:
         return None
-    if len(prices) >= 2 and prices[1] < prices[0]:
+    if len(prices) >= 2 and prices[1] < prices[0] <= prices[1] * 1.5:  # скидка сайта — несколько процентов
         return {"online": prices[1], "in_store": prices[0], "currency": CURRENCY}
     return {"online": prices[0], "in_store": prices[0], "currency": CURRENCY}
 
@@ -132,10 +134,11 @@ def parse_listing(page_html: str) -> list[dict]:
         link = re.search(r'href="([^"]+\.html[^"]*)"', h4.group(1)) or re.search(r'href="([^"]+\.html[^"]*)"', seg)
         name = plain(h4.group(1))
         code = re.search(r"Код:\s*([A-Za-zА-Яа-я]{0,4}\d{4,})", plain(seg))
-        before = plain(page_html[max(0, m.start() - 600): m.start()])
+        before = plain(page_html[max(0, m.start() - 2500): m.start()])
         after_h4 = seg[h4.end():]
         avail = "unknown"
-        tail = before[-120:].lower()
+        # бейдж наличия стоит перед «В избранное» (или внутри карточки до названия)
+        tail = (before[-250:].split("руб./мес")[-1] + " " + plain(seg[: h4.start()])).lower()
         if "нет в наличии" in tail:
             avail = "out_of_stock"
         elif "под заказ" in tail:
